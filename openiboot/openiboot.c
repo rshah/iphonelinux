@@ -74,7 +74,7 @@ void multitouch_pre_setup()
         
         aspeedFWLen = fs_extract(1, "/firmware/zephyr_aspeed.bin", aspeedFW);
         mainFW = aspeedFW + aspeedFWLen;
-        mainFWLen = fs_extract(1, "/firmware/zephyr_aspeed.bin", mainFW);
+        mainFWLen = fs_extract(1, "/firmware/zephyr_main.bin", mainFW);
         
         multitouch_setup(aspeedFW, aspeedFWLen, mainFW, mainFWLen);
     #else
