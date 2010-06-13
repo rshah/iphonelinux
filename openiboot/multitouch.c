@@ -6,6 +6,7 @@
 #include "timer.h"
 #include "util.h"
 #include "spi.h"
+#include "framebuffer.h"
 
 static void multitouch_atn(uint32_t token);
 
