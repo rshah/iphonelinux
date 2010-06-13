@@ -23,35 +23,21 @@
 #include "hfs/fs.h"
 #include "ftl.h"
 #include "scripting.h"
+#include "menu.h"
 
 int globalFtlHasBeenRestored = 0; /* global variable to tell wether a ftl_restore has been done*/
 
 static uint32_t FBWidth;
 static uint32_t FBHeight;
 
-
-static uint32_t* imgiPhoneOS;
-static int imgiPhoneOSWidth;
-static int imgiPhoneOSHeight;
-static int imgiPhoneOSX;
-static int imgiPhoneOSY;
-
-static uint32_t* imgConsole;
-static int imgConsoleWidth;
-static int imgConsoleHeight;
-static int imgConsoleX;
-static int imgConsoleY;
-
-static uint32_t* imgAndroidOS;
+//static uint32_t* imgAndroidOS;
 static uint32_t* imgAndroidOS_unblended;
 static int imgAndroidOSWidth;
 static int imgAndroidOSHeight;
 static int imgAndroidOSX;
 static int imgAndroidOSY;
 
-static uint32_t* imgiPhoneOSSelected;
-static uint32_t* imgConsoleSelected;
-static uint32_t* imgAndroidOSSelected;
+//static uint32_t* imgAndroidOSSelected;
 static uint32_t* imgAndroidOSSelected_unblended;
 
 static uint32_t* imgHeader;
@@ -60,13 +46,16 @@ static int imgHeaderHeight;
 static int imgHeaderX;
 static int imgHeaderY;
 
+static MenuTheme *menuTheme;
+static int totalDefaultMenuItem=3;
+
 typedef enum MenuSelection {
 	MenuSelectioniPhoneOS,
-	MenuSelectionConsole,
-	MenuSelectionAndroidOS
+	MenuSelectionAndroidOS,
+	MenuSelectionConsole
 } MenuSelection;
 
-static MenuSelection Selection;
+static int SelectionIndex;
 
 volatile uint32_t* OtherFramebuffer;
 
@@ -76,97 +65,215 @@ static void drawSelectionBox() {
 	CurFramebuffer = OtherFramebuffer;
 	currentWindow->framebuffer.buffer = CurFramebuffer;
 	OtherFramebuffer = oldFB;
-
-	if(Selection == MenuSelectioniPhoneOS) {
-		framebuffer_draw_image(imgiPhoneOSSelected, imgiPhoneOSX, imgiPhoneOSY, imgiPhoneOSWidth, imgiPhoneOSHeight);
-		framebuffer_draw_image(imgConsole, imgConsoleX, imgConsoleY, imgConsoleWidth, imgConsoleHeight);
-		framebuffer_draw_image(imgAndroidOS, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
-	}
-
-	if(Selection == MenuSelectionConsole) {
-		framebuffer_draw_image(imgiPhoneOS, imgiPhoneOSX, imgiPhoneOSY, imgiPhoneOSWidth, imgiPhoneOSHeight);
-		framebuffer_draw_image(imgConsoleSelected, imgConsoleX, imgConsoleY, imgConsoleWidth, imgConsoleHeight);
-		framebuffer_draw_image(imgAndroidOS, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
-	}
-
-	if(Selection == MenuSelectionAndroidOS) {
-		framebuffer_draw_image(imgiPhoneOS, imgiPhoneOSX, imgiPhoneOSY, imgiPhoneOSWidth, imgiPhoneOSHeight);
-		framebuffer_draw_image(imgConsole, imgConsoleX, imgConsoleY, imgConsoleWidth, imgConsoleHeight);
-		framebuffer_draw_image(imgAndroidOSSelected, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
-	}
+    int ii=0;
+    for (ii=0;ii<menuTheme->totalMenu;ii++) {
+        if (SelectionIndex == ii) {
+            framebuffer_draw_image(menuTheme->menus[ii]->imageFocused.image, menuTheme->menus[ii]->imageFocused.x, menuTheme->menus[ii]->imageFocused.y
+                , menuTheme->menus[ii]->imageFocused.w, menuTheme->menus[ii]->imageFocused.h);
+        }else {
+            framebuffer_draw_image(menuTheme->menus[ii]->imageNormal.image, menuTheme->menus[ii]->imageNormal.x, menuTheme->menus[ii]->imageNormal.y
+                , menuTheme->menus[ii]->imageNormal.w, menuTheme->menus[ii]->imageNormal.h);
+        }
+    }
 
 	lcd_window_address(2, (uint32_t) CurFramebuffer);
 }
 
 static void toggle(int forward) {
-	if(forward)
-	{
-		if(Selection == MenuSelectioniPhoneOS)
-			Selection = MenuSelectionConsole;
-		else if(Selection == MenuSelectionConsole)
-			Selection = MenuSelectionAndroidOS;
-		else if(Selection == MenuSelectionAndroidOS)
-			Selection = MenuSelectioniPhoneOS;
-	} else
-	{
-		if(Selection == MenuSelectioniPhoneOS)
-			Selection = MenuSelectionAndroidOS;
-		else if(Selection == MenuSelectionAndroidOS)
-			Selection = MenuSelectionConsole;
-		else if(Selection == MenuSelectionConsole)
-			Selection = MenuSelectioniPhoneOS;
-	}
+    if (forward) {
+        SelectionIndex++;
+        if (SelectionIndex>=menuTheme->totalMenu) {
+            SelectionIndex=0;
+        }
+    } else {
+        SelectionIndex--;
+        if (SelectionIndex<0) {
+            SelectionIndex=menuTheme->totalMenu-1;
+        }
+    }
 
 	drawSelectionBox();
 }
 
+static inline uint32_t getInt32Field(uint8_t* code) {
+    return (code[0]) | (code[1] << 8) | (code[2] << 16) | (code[3] << 24);
+}
+
+static int menuThemeSetup() 
+{
+    //load menutheme.bin
+    uint32_t size = fs_extract(1, "/menutheme.bin", (void*) 0x09000000);
+    //draw background
+    uint8_t *fieldPointer=0;
+    
+    if (size<1) {
+        return FALSE;
+    }
+    int bgW,bgH;
+    
+    
+    fieldPointer=(void*) 0x09000000;
+    menuTheme = (MenuTheme *) malloc(sizeof(MenuTheme));
+    menuTheme->backgroundSize = getInt32Field(fieldPointer);
+    fieldPointer += 4;
+    menuTheme->background = framebuffer_load_image((void*) fieldPointer, menuTheme->backgroundSize, &bgW, &bgH, TRUE);
+    fieldPointer += menuTheme->backgroundSize;
+    
+    framebuffer_draw_image((uint32_t*)menuTheme->background, 0, 0, bgW, bgH);
+    
+    
+    menuTheme->totalMenu = *((uint8_t*) fieldPointer);
+    fieldPointer += 1;
+    menuTheme->menus = (MenuItem **) malloc(sizeof(MenuItem*) * menuTheme->totalMenu);
+    int ii=0;
+    
+    for (ii=0;ii<menuTheme->totalMenu;ii++) {
+        menuTheme->menus[ii] = (MenuItem *) malloc(sizeof(MenuItem));
+        
+        menuTheme->menus[ii]->osId = *((uint8_t*) fieldPointer); 
+        fieldPointer += 1;
+        
+        menuTheme->menus[ii]->imageNormal.size = getInt32Field(fieldPointer);
+        fieldPointer += 4;
+        
+        menuTheme->menus[ii]->imageNormal.image = framebuffer_load_image((void*) fieldPointer, menuTheme->menus[ii]->imageNormal.size, &(menuTheme->menus[ii]->imageNormal.w), &(menuTheme->menus[ii]->imageNormal.h), TRUE);
+        fieldPointer += menuTheme->menus[ii]->imageNormal.size;
+        
+        menuTheme->menus[ii]->imageNormal.x = *((uint16_t*) fieldPointer); 
+        fieldPointer += 2;
+        
+        menuTheme->menus[ii]->imageNormal.y = *((uint16_t*) fieldPointer); 
+        fieldPointer += 2;
+        //focused image
+        menuTheme->menus[ii]->imageFocused.size = getInt32Field(fieldPointer);
+        fieldPointer += 4;
+        if (menuTheme->menus[ii]->imageFocused.size > 0)
+        {
+            menuTheme->menus[ii]->imageFocused.image = framebuffer_load_image((void*) fieldPointer, menuTheme->menus[ii]->imageFocused.size, &(menuTheme->menus[ii]->imageFocused.w), &(menuTheme->menus[ii]->imageFocused.h), TRUE);
+            fieldPointer += menuTheme->menus[ii]->imageFocused.size;
+            
+            menuTheme->menus[ii]->imageFocused.x = *((uint16_t*) fieldPointer);             
+            fieldPointer += 2;
+            
+            menuTheme->menus[ii]->imageFocused.y = *((uint16_t*) fieldPointer);
+            fieldPointer += 2;
+        }
+        
+        //bigImage
+        menuTheme->menus[ii]->bigImage.size = getInt32Field(fieldPointer);
+        fieldPointer += 4;
+        if (menuTheme->menus[ii]->bigImage.size > 0) {
+            //load bigImage
+            menuTheme->menus[ii]->bigImage.image = framebuffer_load_image((void*) fieldPointer, menuTheme->menus[ii]->bigImage.size, &(menuTheme->menus[ii]->bigImage.w), &(menuTheme->menus[ii]->bigImage.h), TRUE);
+            fieldPointer += menuTheme->menus[ii]->bigImage.size;
+            
+            menuTheme->menus[ii]->bigImage.x = *((uint16_t*) fieldPointer);             
+            fieldPointer += 2;
+            
+            menuTheme->menus[ii]->bigImage.y = *((uint16_t*) fieldPointer);
+            fieldPointer += 2;
+        }
+    }
+    
+    return TRUE;
+}
+
+static void menuDefaultSetup() {
+    
+    menuTheme = (MenuTheme *) malloc(sizeof(MenuTheme));
+    menuTheme->totalMenu = totalDefaultMenuItem;
+    
+    menuTheme->menus = (MenuItem **) malloc(sizeof(MenuItem*) * menuTheme->totalMenu);
+        
+    //iOs
+    menuTheme->menus[0] = (MenuItem *) malloc(sizeof(MenuItem));
+    menuTheme->menus[0]->osId = MenuSelectioniPhoneOS;
+    menuTheme->menus[0]->imageNormal.size = dataiPhoneOSPNG_size;
+    menuTheme->menus[0]->imageNormal.image = framebuffer_load_image(dataiPhoneOSPNG, menuTheme->menus[0]->imageNormal.size, &(menuTheme->menus[0]->imageNormal.w), &(menuTheme->menus[0]->imageNormal.h), TRUE);
+    menuTheme->menus[0]->imageNormal.x = (FBWidth - menuTheme->menus[0]->imageNormal.w) / 2; 
+    menuTheme->menus[0]->imageNormal.y = 84;
+    menuTheme->menus[0]->imageFocused.size = dataiPhoneOSSelectedPNG_size;
+    menuTheme->menus[0]->imageFocused.image = framebuffer_load_image(dataiPhoneOSSelectedPNG, menuTheme->menus[0]->imageFocused.size, &(menuTheme->menus[0]->imageFocused.w), &(menuTheme->menus[0]->imageFocused.h), TRUE);
+    menuTheme->menus[0]->imageFocused.x = (FBWidth - menuTheme->menus[0]->imageFocused.w) / 2;
+    menuTheme->menus[0]->imageFocused.y = 84;
+        
+    //AndroidOS
+    menuTheme->menus[1] = (MenuItem *) malloc(sizeof(MenuItem));
+    menuTheme->menus[1]->osId = MenuSelectionAndroidOS;
+    menuTheme->menus[1]->imageNormal.size = dataAndroidOSPNG_size;
+    //menuTheme->menus[1]->imageNormal.image = framebuffer_load_image(dataAndroidOSPNG, menuTheme->menus[1]->imageNormal.size, &(menuTheme->menus[1]->imageNormal.w), &(menuTheme->menus[1]->imageNormal.h), TRUE);
+    imgAndroidOS_unblended = framebuffer_load_image(dataAndroidOSPNG, dataAndroidOSPNG_size, &imgAndroidOSWidth, &imgAndroidOSHeight, TRUE);
+    menuTheme->menus[1]->imageNormal.w = imgAndroidOSWidth;
+    menuTheme->menus[1]->imageNormal.h = imgAndroidOSHeight;
+    menuTheme->menus[1]->imageNormal.x = (FBWidth - menuTheme->menus[1]->imageNormal.w) / 2; 
+    menuTheme->menus[1]->imageNormal.y = 207;
+    menuTheme->menus[1]->imageFocused.size = dataAndroidOSSelectedPNG_size;
+    imgAndroidOSSelected_unblended = framebuffer_load_image(dataAndroidOSSelectedPNG, dataAndroidOSSelectedPNG_size, &imgAndroidOSWidth, &imgAndroidOSHeight, TRUE);
+    menuTheme->menus[1]->imageFocused.w = imgAndroidOSWidth;
+    menuTheme->menus[1]->imageFocused.h = imgAndroidOSHeight;
+    //menuTheme->menus[1]->imageFocused.image = framebuffer_load_image(dataAndroidOSSelectedPNG, menuTheme->menus[1]->imageFocused.size, &(menuTheme->menus[1]->imageFocused.w), &(menuTheme->menus[1]->imageFocused.h), TRUE);
+    menuTheme->menus[1]->imageFocused.x = (FBWidth - menuTheme->menus[1]->imageFocused.w) / 2;
+    menuTheme->menus[1]->imageFocused.y = 207;
+        
+    //Console
+    menuTheme->menus[2] = (MenuItem *) malloc(sizeof(MenuItem));
+    menuTheme->menus[2]->osId = MenuSelectionConsole;
+    menuTheme->menus[2]->imageNormal.size = dataConsolePNG_size;
+    menuTheme->menus[2]->imageNormal.image = framebuffer_load_image(dataConsolePNG, menuTheme->menus[2]->imageNormal.size, &(menuTheme->menus[2]->imageNormal.w), &(menuTheme->menus[2]->imageNormal.h), TRUE);
+    menuTheme->menus[2]->imageNormal.x = (FBWidth - menuTheme->menus[2]->imageNormal.w) / 2; 
+    menuTheme->menus[2]->imageNormal.y = 330;
+    menuTheme->menus[2]->imageFocused.size = dataConsoleSelectedPNG_size;
+    menuTheme->menus[2]->imageFocused.image = framebuffer_load_image(dataConsoleSelectedPNG, menuTheme->menus[2]->imageFocused.size, &(menuTheme->menus[2]->imageFocused.w), &(menuTheme->menus[2]->imageFocused.h), TRUE);
+    menuTheme->menus[2]->imageFocused.x = (FBWidth - menuTheme->menus[2]->imageFocused.w) / 2;
+    menuTheme->menus[2]->imageFocused.y = 330;
+    
+    
+    
+    imgHeader = framebuffer_load_image(dataHeaderPNG, dataHeaderPNG_size, &imgHeaderWidth, &imgHeaderHeight, TRUE);
+    
+    bufferPrintf("menu: images loaded\r\n");
+    
+    imgAndroidOSX = menuTheme->menus[1]->imageNormal.x;
+    imgAndroidOSY = menuTheme->menus[1]->imageNormal.y;
+    
+    imgHeaderX = (FBWidth - imgHeaderWidth) / 2;
+    imgHeaderY = 17;
+    
+    framebuffer_draw_image(imgHeader, imgHeaderX, imgHeaderY, imgHeaderWidth, imgHeaderHeight);
+    
+    //framebuffer_draw_rect_hgradient(0, 42, 0, 360, FBWidth, (FBHeight - 12) - 360);
+    //framebuffer_draw_rect_hgradient(0x22, 0x22, 0, FBHeight - 12, FBWidth, 12);
+    
+    menuTheme->menus[1]->imageNormal.image = malloc(imgAndroidOSWidth * imgAndroidOSHeight * sizeof(uint32_t));
+    menuTheme->menus[1]->imageFocused.image = malloc(imgAndroidOSWidth * imgAndroidOSHeight * sizeof(uint32_t));
+    
+    framebuffer_capture_image(menuTheme->menus[1]->imageNormal.image, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
+    framebuffer_capture_image(menuTheme->menus[1]->imageFocused.image, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
+    
+    framebuffer_blend_image(menuTheme->menus[1]->imageNormal.image, imgAndroidOSWidth, imgAndroidOSHeight, imgAndroidOS_unblended, imgAndroidOSWidth, imgAndroidOSHeight, 0, 0);
+    framebuffer_blend_image(menuTheme->menus[1]->imageFocused.image, imgAndroidOSWidth, imgAndroidOSHeight, imgAndroidOSSelected_unblended, imgAndroidOSWidth, imgAndroidOSHeight, 0, 0);    
+}
+
 int menu_setup(int timeout) {
-	FBWidth = currentWindow->framebuffer.width;
-	FBHeight = currentWindow->framebuffer.height;	
-
-	imgiPhoneOS = framebuffer_load_image(dataiPhoneOSPNG, dataiPhoneOSPNG_size, &imgiPhoneOSWidth, &imgiPhoneOSHeight, TRUE);
-	imgiPhoneOSSelected = framebuffer_load_image(dataiPhoneOSSelectedPNG, dataiPhoneOSSelectedPNG_size, &imgiPhoneOSWidth, &imgiPhoneOSHeight, TRUE);
-	imgConsole = framebuffer_load_image(dataConsolePNG, dataConsolePNG_size, &imgConsoleWidth, &imgConsoleHeight, TRUE);
-	imgConsoleSelected = framebuffer_load_image(dataConsoleSelectedPNG, dataConsoleSelectedPNG_size, &imgConsoleWidth, &imgConsoleHeight, TRUE);
-	imgAndroidOS_unblended = framebuffer_load_image(dataAndroidOSPNG, dataAndroidOSPNG_size, &imgAndroidOSWidth, &imgAndroidOSHeight, TRUE);
-	imgAndroidOSSelected_unblended = framebuffer_load_image(dataAndroidOSSelectedPNG, dataAndroidOSSelectedPNG_size, &imgAndroidOSWidth, &imgAndroidOSHeight, TRUE);
-	imgHeader = framebuffer_load_image(dataHeaderPNG, dataHeaderPNG_size, &imgHeaderWidth, &imgHeaderHeight, TRUE);
-
-	bufferPrintf("menu: images loaded\r\n");
-
-	imgiPhoneOSX = (FBWidth - imgiPhoneOSWidth) / 2;
-	imgiPhoneOSY = 84;
-
-	imgConsoleX = (FBWidth - imgConsoleWidth) / 2;
-	imgConsoleY = 207;
-
-	imgAndroidOSX = (FBWidth - imgAndroidOSWidth) / 2;
-	imgAndroidOSY = 330;
-
-	imgHeaderX = (FBWidth - imgHeaderWidth) / 2;
-	imgHeaderY = 17;
-
-	framebuffer_draw_image(imgHeader, imgHeaderX, imgHeaderY, imgHeaderWidth, imgHeaderHeight);
-
-	framebuffer_draw_rect_hgradient(0, 42, 0, 360, FBWidth, (FBHeight - 12) - 360);
-	framebuffer_draw_rect_hgradient(0x22, 0x22, 0, FBHeight - 12, FBWidth, 12);
-
-	framebuffer_setloc(0, 47);
-	framebuffer_setcolors(COLOR_WHITE, 0x222222);
-	framebuffer_print_force(OPENIBOOT_VERSION_STR);
-	framebuffer_setcolors(COLOR_WHITE, COLOR_BLACK);
-	framebuffer_setloc(0, 0);
-
-	imgAndroidOS = malloc(imgAndroidOSWidth * imgAndroidOSHeight * sizeof(uint32_t));
-	imgAndroidOSSelected = malloc(imgAndroidOSWidth * imgAndroidOSHeight * sizeof(uint32_t));
-
-	framebuffer_capture_image(imgAndroidOS, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
-	framebuffer_capture_image(imgAndroidOSSelected, imgAndroidOSX, imgAndroidOSY, imgAndroidOSWidth, imgAndroidOSHeight);
-
-	framebuffer_blend_image(imgAndroidOS, imgAndroidOSWidth, imgAndroidOSHeight, imgAndroidOS_unblended, imgAndroidOSWidth, imgAndroidOSHeight, 0, 0);
-	framebuffer_blend_image(imgAndroidOSSelected, imgAndroidOSWidth, imgAndroidOSHeight, imgAndroidOSSelected_unblended, imgAndroidOSWidth, imgAndroidOSHeight, 0, 0);
-
-	Selection = MenuSelectioniPhoneOS;
+    int isMenuLoaded = FALSE;
+    
+    #ifndef NO_HFS
+        isMenuLoaded = menuThemeSetup();
+    #endif
+    FBWidth = currentWindow->framebuffer.width;
+    FBHeight = currentWindow->framebuffer.height;   
+    
+    if (isMenuLoaded == FALSE) {
+        menuDefaultSetup();
+    }
+    
+    framebuffer_setloc(0, 47);
+    framebuffer_setcolors(COLOR_WHITE, 0x222222);
+    framebuffer_print_force(OPENIBOOT_VERSION_STR);
+    framebuffer_setcolors(COLOR_WHITE, COLOR_BLACK);
+    framebuffer_setloc(0, 0);
+    
+	SelectionIndex=0;
 
 	OtherFramebuffer = CurFramebuffer;
 	CurFramebuffer = (volatile uint32_t*) NextFramebuffer;
@@ -205,8 +312,8 @@ int menu_setup(int timeout) {
 		}
 		udelay(10000);
 	}
-
-	if(Selection == MenuSelectioniPhoneOS) {
+	int osId = menuTheme->menus[SelectionIndex]->osId;
+    if(osId == MenuSelectioniPhoneOS) {
 		Image* image = images_get(fourcc("ibox"));
 		if(image == NULL)
 			image = images_get(fourcc("ibot"));
@@ -215,7 +322,7 @@ int menu_setup(int timeout) {
 		chainload((uint32_t)imageData);
 	}
 
-	if(Selection == MenuSelectionConsole) {
+    if(osId == MenuSelectionConsole) {
 		// Reset framebuffer back to original if necessary
 		if((uint32_t) CurFramebuffer == NextFramebuffer)
 		{
@@ -228,7 +335,7 @@ int menu_setup(int timeout) {
 		framebuffer_clear();
 	}
 
-	if(Selection == MenuSelectionAndroidOS) {
+    if(osId == MenuSelectionAndroidOS) {
 		// Reset framebuffer back to original if necessary
 		if((uint32_t) CurFramebuffer == NextFramebuffer)
 		{
