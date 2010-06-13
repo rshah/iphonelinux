@@ -41,6 +41,7 @@
 #include "wmcodec.h"
 #include "wdt.h"
 #include "als.h"
+#include "multitouch.h"
 
 int received_file_size;
 
@@ -61,6 +62,33 @@ typedef struct CommandQueue {
 CommandQueue* commandQueue = NULL;
 
 static void startUSB();
+void multitouch_pre_setup()
+{
+    #ifdef CONFIG_IPHONE
+        //CLEAN UP THIS FOR 2G
+        
+        uint8_t* aspeedFW = (void*) 0x09000000;
+        uint32_t aspeedFWLen = 0;
+        uint8_t* mainFW = 0;
+        uint32_t mainFWLen = 0;
+        
+        aspeedFWLen = fs_extract(1, "/firmware/zephyr_aspeed.bin", aspeedFW);
+        mainFW = aspeedFW + aspeedFWLen;
+        mainFWLen = fs_extract(1, "/firmware/zephyr_aspeed.bin", mainFW);
+        
+        multitouch_setup(aspeedFW, aspeedFWLen, mainFW, mainFWLen);
+    #else
+        int size;
+        size = fs_extract(1, "/firmware/zephyr2.bin", (void*) 0x09000000);
+        if(size < 0)
+        {
+            bufferPrintf("Cannot find zephyr bin.\r\n");
+            return;
+        }
+        
+        multitouch_setup((uint8_t*) 0x09000000, size);
+    #endif
+}
 
 void OpenIBootStart() {
 	setup_openiboot();
@@ -68,9 +96,11 @@ void OpenIBootStart() {
 
 	framebuffer_setdisplaytext(TRUE);
 	framebuffer_clear();
-    //framebuffer_setdisplaytext(FALSE);
+    
     #ifndef NO_HFS
+        framebuffer_setdisplaytext(FALSE);
         fs_setup();
+        multitouch_pre_setup();
     #endif
 #ifndef SMALL
 #ifndef NO_STBIMAGE

@@ -24,6 +24,7 @@
 #include "ftl.h"
 #include "scripting.h"
 #include "menu.h"
+#include "multitouch.h"
 
 int globalFtlHasBeenRestored = 0; /* global variable to tell wether a ftl_restore has been done*/
 
@@ -77,6 +78,22 @@ static void drawSelectionBox() {
     }
 
 	lcd_window_address(2, (uint32_t) CurFramebuffer);
+}
+
+static int touch_watcher()
+{
+    multitouch_run();
+    int ii=0;
+    for (ii=0;ii<menuTheme->totalMenu;ii++) {
+        if (multitouch_ispoint_inside_region(menuTheme->menus[ii]->imageNormal.x, menuTheme->menus[ii]->imageNormal.y
+            , menuTheme->menus[ii]->imageNormal.w, menuTheme->menus[ii]->imageNormal.h) == TRUE) {
+            SelectionIndex = ii;
+        drawSelectionBox();
+        return TRUE;
+        }
+    }
+    
+    return FALSE;
 }
 
 static void toggle(int forward) {
@@ -227,8 +244,6 @@ static void menuDefaultSetup() {
     menuTheme->menus[2]->imageFocused.x = (FBWidth - menuTheme->menus[2]->imageFocused.w) / 2;
     menuTheme->menus[2]->imageFocused.y = 330;
     
-    
-    
     imgHeader = framebuffer_load_image(dataHeaderPNG, dataHeaderPNG_size, &imgHeaderWidth, &imgHeaderHeight, TRUE);
     
     bufferPrintf("menu: images loaded\r\n");
@@ -286,6 +301,14 @@ int menu_setup(int timeout) {
 
 	uint64_t startTime = timer_get_system_microtime();
 	while(TRUE) {
+        if(touch_watcher()) {
+            break;
+        }
+        else
+        {
+            startTime = timer_get_system_microtime();
+            udelay(200000);
+        }
 		if(buttons_is_pushed(BUTTONS_HOLD)) {
 			toggle(TRUE);
 			startTime = timer_get_system_microtime();
@@ -322,7 +345,7 @@ int menu_setup(int timeout) {
 		chainload((uint32_t)imageData);
 	}
 
-    if(osId == MenuSelectionConsole) {
+    else if(osId == MenuSelectionConsole) {
 		// Reset framebuffer back to original if necessary
 		if((uint32_t) CurFramebuffer == NextFramebuffer)
 		{
@@ -335,7 +358,7 @@ int menu_setup(int timeout) {
 		framebuffer_clear();
 	}
 
-    if(osId == MenuSelectionAndroidOS) {
+    else if(osId == MenuSelectionAndroidOS) {
 		// Reset framebuffer back to original if necessary
 		if((uint32_t) CurFramebuffer == NextFramebuffer)
 		{

@@ -32,6 +32,7 @@ static int SensorRegionParamLen;
 
 // This is flipped between 0x64 and 0x65 for every transaction
 static int CurNOP;
+static FingerData * fingerData;
 
 typedef struct MTSPISetting
 {
@@ -80,6 +81,7 @@ void multitouch_on()
 
 		udelay(15000);
 		MultitouchOn = TRUE;
+        fingerData=0;
 	}
 }
 
@@ -278,6 +280,7 @@ static void newPacket(const uint8_t* data, int len)
 		finger = (FingerData*) (((uint8_t*) finger) + header->fingerDataLen);
 	}
 
+    fingerData = (FingerData*)(data + (header->headerLen));
 	bufferPrintf("-------END-------\r\n");
 }
 
@@ -701,4 +704,34 @@ int mt_spi_txrx(const MTSPISetting* setting, const uint8_t* outBuffer, int outLe
 	int ret = spi_txrx(MT_SPI, outBuffer, outLen, inBuffer, inLen, TRUE);
 	gpio_pin_output(MT_SPI_CS, 1);
 	return ret;
+}
+
+void multitouch_run()
+{
+    while(GotATN>0)
+    {
+        EnterCriticalSection();
+        if(!GotATN)
+        {
+            LeaveCriticalSection();
+            continue;
+        }
+        --GotATN;
+        LeaveCriticalSection();
+        
+        readFrame();
+    }
+}
+
+int multitouch_ispoint_inside_region(uint16_t x, uint16_t y, int w, int h)
+{
+    int fingerX,fingerY;
+    fingerX = (fingerData->x * framebuffer_width()) / SensorWidth - 2;
+    fingerY = ((SensorHeight - fingerData->y) * framebuffer_height()) / SensorHeight - 2;
+    
+    if (fingerX>=x && fingerX<= (x + w)  && fingerY>=y && fingerY<= (y + w) ) {
+        return TRUE;
+    }
+    
+    return FALSE;
 }
