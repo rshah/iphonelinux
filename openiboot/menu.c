@@ -88,8 +88,8 @@ static int touch_watcher()
         if (multitouch_ispoint_inside_region(menuTheme->menus[ii]->imageNormal.x, menuTheme->menus[ii]->imageNormal.y
             , menuTheme->menus[ii]->imageNormal.w, menuTheme->menus[ii]->imageNormal.h) == TRUE) {
             SelectionIndex = ii;
-        drawSelectionBox();
-        return TRUE;
+            drawSelectionBox();
+            return TRUE;
         }
     }
     
@@ -344,20 +344,6 @@ int menu_setup(int timeout) {
 		images_read(image, &imageData);
 		chainload((uint32_t)imageData);
 	}
-
-    else if(osId == MenuSelectionConsole) {
-		// Reset framebuffer back to original if necessary
-		if((uint32_t) CurFramebuffer == NextFramebuffer)
-		{
-			CurFramebuffer = OtherFramebuffer;
-			currentWindow->framebuffer.buffer = CurFramebuffer;
-			lcd_window_address(2, (uint32_t) CurFramebuffer);
-		}
-
-		framebuffer_setdisplaytext(TRUE);
-		framebuffer_clear();
-	}
-
     else if(osId == MenuSelectionAndroidOS) {
 		// Reset framebuffer back to original if necessary
 		if((uint32_t) CurFramebuffer == NextFramebuffer)
@@ -393,7 +379,19 @@ int menu_setup(int timeout) {
 		boot_linux_from_files();
 #endif
 	}
-
+	//else if(osId == MenuSelectionConsole) {
+    else { //just fallback to console until more button exist
+        // Reset framebuffer back to original if necessary
+        if((uint32_t) CurFramebuffer == NextFramebuffer)
+        {
+            CurFramebuffer = OtherFramebuffer;
+            currentWindow->framebuffer.buffer = CurFramebuffer;
+            lcd_window_address(2, (uint32_t) CurFramebuffer);
+        }
+        
+        framebuffer_setdisplaytext(TRUE);
+        framebuffer_clear();
+    }
 	return 0;
 }
 

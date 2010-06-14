@@ -116,6 +116,7 @@ void OpenIBootStart() {
 			menuTimeout = parseNumber(sMenuTimeout);
 
 		menu_setup(menuTimeout);
+        bufferPrintf("EXIT MENU");
 	}
 #endif
 #endif
