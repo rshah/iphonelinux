@@ -236,20 +236,6 @@ int multitouch_setup(const uint8_t* ASpeedFirmware, int ASpeedFirmwareLen, const
 
 	GotATN = 0;
 
-	while(TRUE)
-	{
-		EnterCriticalSection();
-		if(!GotATN)
-		{
-			LeaveCriticalSection();
-			continue;
-		}
-		--GotATN;
-		LeaveCriticalSection();
-
-		while(readFrame() == 1);
-	}
-
 	return 0;
 }
 
@@ -614,7 +600,6 @@ static int verifyUpload(int checksum)
 	return TRUE;
 }
 
-
 static void sendExecutePacket()
 {
 	uint8_t tx[4];
@@ -720,7 +705,7 @@ void multitouch_run()
         --GotATN;
         LeaveCriticalSection();
         
-        readFrame();
+        while(readFrame() == 1);
     }
 }
 
