@@ -19,6 +19,8 @@ typedef struct MenuItem {
 } MenuItem;
 
 typedef struct MenuTheme {
+    uint8_t majorVersion;
+    uint8_t minorVersion;
     uint32_t backgroundSize;
     uint32_t *background;
     uint8_t totalMenu;

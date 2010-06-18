@@ -130,7 +130,23 @@ static int menuThemeSetup()
     
     
     fieldPointer=(void*) 0x09000000;
+    //check header
+    if (*((uint8_t*) fieldPointer) != 'O' && *((uint8_t*) fieldPointer+1) != 'I'
+        && *((uint8_t*) fieldPointer+2) != 'B' && *((uint8_t*) fieldPointer+3) != 'T'
+        && *((uint8_t*) fieldPointer+4) != 'H' && *((uint8_t*) fieldPointer+5) != 'M'
+        ) {
+        return FALSE;
+    }
+    
+    fieldPointer += 6;
+    
     menuTheme = (MenuTheme *) malloc(sizeof(MenuTheme));
+    menuTheme->majorVersion = *((uint8_t*) fieldPointer);
+    fieldPointer += 1;
+    
+    menuTheme->minorVersion = *((uint8_t*) fieldPointer);
+    fieldPointer += 1;
+    
     menuTheme->backgroundSize = getInt32Field(fieldPointer);
     fieldPointer += 4;
     menuTheme->background = framebuffer_load_image((void*) fieldPointer, menuTheme->backgroundSize, &bgW, &bgH, TRUE);
