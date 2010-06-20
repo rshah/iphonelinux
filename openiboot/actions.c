@@ -443,6 +443,6 @@ void boot_linux_from_files()
 
 	bufferPrintf("Booting Linux...\r\n");
 
-	boot_linux("console=tty root=/dev/ram0 init=/init rw");
+	boot_linux("console=tty root=/dev/ram0 init=/init quiet rw");
 }
 #endif

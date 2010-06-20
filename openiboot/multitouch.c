@@ -42,8 +42,8 @@ typedef struct MTSPISetting
 	int rxDelay;
 } MTSPISetting;
 
-const MTSPISetting MTNormalSpeed = {83000, 5000, 10000};
-const MTSPISetting MTFastSpeed= {4500000, 0, 10000};
+const MTSPISetting MTNormalSpeed = {83000, 5, 10};
+const MTSPISetting MTFastSpeed= {4500000, 0, 10};
 
 #define NORMAL_SPEED (&MTNormalSpeed)
 #define FAST_SPEED (&MTFastSpeed)
@@ -210,9 +210,11 @@ int multitouch_setup(const uint8_t* ASpeedFirmware, int ASpeedFirmwareLen, const
 		return -1;
 	}
 
-	SensorWidth = reportBuffer[0] | (reportBuffer[1] >> 8) | (reportBuffer[2] >> 16) | (reportBuffer[3] >> 24);
-	SensorHeight = reportBuffer[4] | (reportBuffer[5] >> 8) | (reportBuffer[6] >> 16) | (reportBuffer[7] >> 24);
-
+	//SensorWidth = reportBuffer[0] | (reportBuffer[1] >> 8) | (reportBuffer[2] >> 16) | (reportBuffer[3] >> 24);
+	//SensorHeight = reportBuffer[4] | (reportBuffer[5] >> 8) | (reportBuffer[6] >> 16) | (reportBuffer[7] >> 24);
+    SensorWidth = (9000 - *((uint32_t*)&reportBuffer[0])) * 84 / 73;//*((u32*)&reportBuffer[0]);
+    SensorHeight = (13850 - *((uint32_t*)&reportBuffer[4])) * 84 / 73;//*((u32*)&reportBuffer[4]);
+    
 	int i;
 
 	bufferPrintf("Family ID                : 0x%x\r\n", FamilyID);
@@ -705,8 +707,22 @@ void multitouch_run()
         --GotATN;
         LeaveCriticalSection();
         
-        while(readFrame() == 1);
+        readFrame();
     }
+//     while(TRUE)
+//     {
+//         EnterCriticalSection();
+//         if(!GotATN)
+//         {
+//             LeaveCriticalSection();
+//             continue;
+//         }
+//         --GotATN;
+//         LeaveCriticalSection();
+//         
+//         while(readFrame() == 1);
+//         return;
+//     }
 }
 
 int multitouch_ispoint_inside_region(uint16_t x, uint16_t y, int w, int h)
